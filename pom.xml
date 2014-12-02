@@ -81,7 +81,7 @@
         <artifactId>maven-thrift-plugin</artifactId>
         <version>0.1.10</version>
         <configuration>
-          <thriftExecutable>../build/bin/thrift</thriftExecutable>
+          <thriftExecutable>bin/thrift</thriftExecutable>
           <thriftSourceRoot>../controller/src/vnsw/agent/openstack</thriftSourceRoot>
         </configuration>
         <executions>
