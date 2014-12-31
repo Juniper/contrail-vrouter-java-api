@@ -4,7 +4,7 @@
   <groupId>net.juniper.contrail</groupId>
   <artifactId>juniper-contrail-vrouter-api</artifactId>
   <packaging>jar</packaging>
-  <version>1.0</version>
+  <version>3.0-SNAPSHOT</version>
   <name>juniper-contrail-vrouter-api</name>
   <url>http://maven.apache.org</url>
   <distributionManagement>
