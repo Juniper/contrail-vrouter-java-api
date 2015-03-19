@@ -1,12 +1,6 @@
-SRC_VER := $(shell cat ./../controller/src/base/version.info)
-BUILDTIME := $(shell date -u +%m%d%Y)
-
-ifdef SRC_VER
-BUILDTAG = $(SRC_VER)-$(BUILDTIME)
-else
-BUILDTAG = $(BUILDTIME)
-endif
-
+SRC_VER ?= $(shell cat ./../controller/src/base/version.info)
+BUILDNUM ?= $(shell date -u +%m%d%Y)
+export BUILDTAG ?= $(SRC_VER)-$(BUILDNUM)
 
 all:
 	$(eval BUILDDIR=./../build/vrouter-java-api)
@@ -16,7 +10,7 @@ all:
 	(cd ${BUILDDIR}; mvn install)
 	#(cd ${BUILDDIR}; fakeroot debian/rules clean)
 	#(cd ${BUILDDIR}; fakeroot debian/rules binary)
-	(cd ${BUILDDIR}; debuild -i -us -uc -b)
+	(cd ${BUILDDIR}; debuild --preserve-envvar=BUILDTAG -i -us -uc -b)
 	@echo "Wrote: ${BUILDDIR}/../libcontrail-vrouter-java-api_${BUILDTAG}_all.deb"
 
 clean:
