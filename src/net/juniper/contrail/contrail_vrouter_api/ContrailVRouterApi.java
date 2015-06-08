@@ -35,13 +35,15 @@ public class ContrailVRouterApi {
     private Map<UUID, Port> ports;
     private InstanceService.Iface client;
     private boolean oneShot;
+    private int timeout=0; // socket timeout in milliseconds
 
-    public ContrailVRouterApi(InetAddress ip, int port, boolean oneShot) {
+    public ContrailVRouterApi(InetAddress ip, int port, boolean oneShot, int timeout) {
         this.rpc_address = ip;
         this.rpc_port = port;
         this.ports = new HashMap<UUID, Port>();
         this.client = null;
         this.oneShot = oneShot;
+        this.timeout = timeout;
     }
 
     private static List<Short> UUIDToArray(UUID uuid) {
@@ -68,6 +70,8 @@ public class ContrailVRouterApi {
 
     InstanceService.Iface CreateRpcClient() {
         TSocket socket = new TSocket(rpc_address.getHostAddress(), rpc_port);
+        if (timeout != 0)
+            socket.setTimeout(timeout);
         TTransport transport = new TFramedTransport(socket);
         try {
             transport.open();
