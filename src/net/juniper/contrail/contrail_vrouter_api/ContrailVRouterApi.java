@@ -102,6 +102,8 @@ public class ContrailVRouterApi {
             client = null;
             return false;
         }
+        
+        s_logger.info("Connected to " + rpc_address + ":" + rpc_port);
         return Resynchronize();
     }
 
