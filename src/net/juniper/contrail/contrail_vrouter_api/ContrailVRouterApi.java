@@ -21,10 +21,8 @@ import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TTransportException;
-
 import net.juniper.contrail.contrail_vrouter_api.InstanceService;
 import net.juniper.contrail.contrail_vrouter_api.Port;
-import net.juniper.contrail.contrail_vrouter_api.ReconnectingThriftClient;
 
 public class ContrailVRouterApi {
     private static final Logger s_logger =
