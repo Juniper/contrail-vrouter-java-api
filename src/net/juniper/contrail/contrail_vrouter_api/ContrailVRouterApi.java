@@ -134,7 +134,7 @@ public class ContrailVRouterApi {
      * Add a port to the agent. The information is stored in the ports
      * map since the vrouter agent may not be running at the
      * moment or the RPC may fail.
-     * 
+     *
      * @param vif_uuid         UUID of the VIF/Port
      * @param vm_uuid          UUID of the instance
      * @param interface_name   Name of the VIF/Port
@@ -143,14 +143,37 @@ public class ContrailVRouterApi {
      * @param network_uuid     UUID of the associated virtual network
      */
     public boolean AddPort(UUID vif_uuid, UUID vm_uuid, String interface_name,
-            InetAddress interface_ip, byte[] mac_address, UUID network_uuid, short vlanId, 
+            InetAddress interface_ip, byte[] mac_address, UUID network_uuid, short vlanId,
             short primaryVlanId, String vm_name) {
+        AddPort(vif_uuid, vm_uuid, interface_name, interface_ip,
+                mac_address, network_uuid, vlanId, primaryVlanId, vm_name, null);
+        return true;
+    }
+
+    /**
+     * Add a port to the agent. The information is stored in the ports
+     * map since the vrouter agent may not be running at the
+     * moment or the RPC may fail.
+     *
+     * @param vif_uuid         UUID of the VIF/Port
+     * @param vm_uuid          UUID of the instance
+     * @param interface_name   Name of the VIF/Port
+     * @param interface_ip     IP address associated with the VIF
+     * @param mac_address      MAC address of the VIF
+     * @param network_uuid     UUID of the associated virtual network
+     * @param project_uuid     UUID of the associated project
+     */
+    public boolean AddPort(UUID vif_uuid, UUID vm_uuid, String interface_name,
+            InetAddress interface_ip, byte[] mac_address, UUID network_uuid, short vlanId,
+            short primaryVlanId, String vm_name,
+            UUID project_uuid) {
         Port aport = new Port(UUIDToArray(vif_uuid), UUIDToArray(vm_uuid),
                 interface_name, interface_ip.getHostAddress(),
                 UUIDToArray(network_uuid), MacAddressToString(mac_address));
         aport.setVlan_id(primaryVlanId);
         aport.setIsolated_vlan_id(vlanId);
         aport.setDisplay_name(vm_name);
+        aport.setVm_project_id(UUIDToArray(project_uuid));
         ports.put(vif_uuid, aport);
         if (client == null) {
             if (!CreateAndResynchronizeRpcClient()) {
