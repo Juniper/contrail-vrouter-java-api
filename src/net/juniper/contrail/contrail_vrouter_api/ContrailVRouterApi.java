@@ -11,8 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
-
 import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TProtocol;
@@ -34,6 +34,10 @@ public class ContrailVRouterApi {
     private InstanceService.Iface client;
     private boolean oneShot;
     private int timeout=0; // socket timeout in milliseconds
+
+    public ContrailVRouterApi(InetAddress ip, int port) {
+        this(ip, port, false, 1000);
+    }
 
     public ContrailVRouterApi(InetAddress ip, int port, boolean oneShot, int timeout) {
         this.rpc_address = ip;
@@ -146,10 +150,10 @@ public class ContrailVRouterApi {
      * @param mac_address      MAC address of the VIF
      * @param network_uuid     UUID of the associated virtual network
      */
-    public boolean AddPort(UUID vif_uuid, UUID vm_uuid, String interface_name,
+    public boolean addPort(UUID vif_uuid, UUID vm_uuid, String interface_name,
             InetAddress interface_ip, byte[] mac_address, UUID network_uuid, short vlanId,
             short primaryVlanId, String vm_name) {
-        AddPort(vif_uuid, vm_uuid, interface_name, interface_ip,
+        addPort(vif_uuid, vm_uuid, interface_name, interface_ip,
                 mac_address, network_uuid, vlanId, primaryVlanId, vm_name, null);
         return true;
     }
@@ -167,7 +171,7 @@ public class ContrailVRouterApi {
      * @param network_uuid     UUID of the associated virtual network
      * @param project_uuid     UUID of the associated project
      */
-    public boolean AddPort(UUID vif_uuid, UUID vm_uuid, String interface_name,
+    public boolean addPort(UUID vif_uuid, UUID vm_uuid, String interface_name,
             InetAddress interface_ip, byte[] mac_address, UUID network_uuid, short vlanId,
             short primaryVlanId, String vm_name,
             UUID project_uuid) {
@@ -202,13 +206,38 @@ public class ContrailVRouterApi {
         return true;
     }
 
+    public boolean addPort(String vif_uuid, String vm_uuid, String interface_name,
+            String interface_ip, String mac_address, String network_uuid, short vlanId,
+            short primaryVlanId, String vm_name) {
+        return addPort(vif_uuid, vm_uuid, interface_name, interface_ip,
+                mac_address, network_uuid, vlanId, primaryVlanId, vm_name, null);
+    }
+
+    public boolean addPort(String vif_uuid, String vm_uuid, String interface_name,
+            String interface_ip, String mac_address, String network_uuid, short vlanId,
+            short primaryVlanId, String vm_name, String project_uuid) {
+
+        try {
+            return addPort(UUID.fromString(vif_uuid),
+                        UUID.fromString(vm_uuid), interface_name,
+                        InetAddress.getByName(interface_ip),
+                        Utils.parseMacAddress(mac_address),
+                        UUID.fromString(network_uuid),
+                        vlanId, primaryVlanId, vm_name,
+                        UUID.fromString(project_uuid));
+        } catch (UnknownHostException e) {
+            s_logger.error("addPort failed due to unknown IP " + interface_ip);
+            return false;
+        }
+    }
+
     /**
      * Delete a port from the agent. The port is first removed from the
      * internal ports map
      *
      * @param vif_uuid  UUID of the VIF/Port
      */
-    public boolean DeletePort(UUID vif_uuid) {
+    public boolean deletePort(UUID vif_uuid) {
         ports.remove(vif_uuid);
         if (client == null) {
             if (!CreateAndResynchronizeRpcClient()) {
@@ -228,6 +257,10 @@ public class ContrailVRouterApi {
             }
         }
         return true;
+    }
+
+    public boolean deletePort(String vif_uuid) {
+        return deletePort(UUID.fromString(vif_uuid));
     }
 
     /**

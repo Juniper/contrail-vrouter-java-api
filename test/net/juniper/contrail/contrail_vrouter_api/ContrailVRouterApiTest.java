@@ -17,10 +17,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import static org.mockito.Mockito.*;
-
 import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.MockitoAnnotations;
-
 import net.juniper.contrail.contrail_vrouter_api.ContrailVRouterApi;
 import net.juniper.contrail.contrail_vrouter_api.InstanceService;
 import net.juniper.contrail.contrail_vrouter_api.Port;
@@ -32,7 +30,7 @@ public class ContrailVRouterApiTest {
     private ContrailVRouterApi apiTest;
     private static final Logger s_logger =
         Logger.getLogger(ContrailVRouterApiTest.class);
-        
+
     @Before
     public void setUp() throws Exception {
         s_logger.debug("Setting up ContrailVRouterApiTest");
@@ -56,14 +54,14 @@ public class ContrailVRouterApiTest {
         UUID project_uuid = UUID.randomUUID();
         byte[] mac = new byte[] { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 };
         InetAddress ip = InetAddress.getLocalHost();
-        assertTrue(apiTest.AddPort(vif_uuid, instance_uuid, "tapX",
+        assertTrue(apiTest.addPort(vif_uuid, instance_uuid, "tapX",
                         ip, mac, network_uuid, (short)1, (short)1000, "TestVM", project_uuid));
         verify(mockClient).Connect();
         verify(mockClient).AddPort(anyListOf(Port.class));
         assertTrue(apiTest.getPorts().containsKey(vif_uuid));
         // Add
         UUID vif_uuid1 = UUID.randomUUID();
-        assertTrue(apiTest.AddPort(vif_uuid1, instance_uuid, "tapX",
+        assertTrue(apiTest.addPort(vif_uuid1, instance_uuid, "tapX",
                         ip, mac, network_uuid, (short)1, (short)1000, "TestVM", project_uuid));
         verify(mockClient, times(2)).AddPort(anyListOf(Port.class));
         assertTrue(apiTest.getPorts().containsKey(vif_uuid1));
@@ -78,13 +76,13 @@ public class ContrailVRouterApiTest {
         UUID project_uuid = UUID.randomUUID();
         byte[] mac = new byte[] { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 };
         InetAddress ip = InetAddress.getLocalHost();
-        assertTrue(apiTest.AddPort(vif_uuid, instance_uuid, "tapX",
+        assertTrue(apiTest.addPort(vif_uuid, instance_uuid, "tapX",
                         ip, mac, network_uuid, (short)1, (short)1000, "TestVM", project_uuid));
         verify(mockClient).Connect();
         verify(mockClient).AddPort(anyListOf(Port.class));
         assertTrue(apiTest.getPorts().containsKey(vif_uuid));
         // Delete
-        assertTrue(apiTest.DeletePort(vif_uuid));
+        assertTrue(apiTest.deletePort(vif_uuid));
         verify(mockClient).DeletePort(anyListOf(Short.class));
         assertFalse(apiTest.getPorts().containsKey(vif_uuid));
     }
