@@ -206,14 +206,6 @@ public class ContrailVRouterApi {
         return true;
     }
 
-    @Deprecated
-    public boolean AddPort(UUID vif_uuid, UUID vm_uuid, String interface_name,
-            InetAddress interface_ip, byte[] mac_address, UUID network_uuid, short vlanId,
-            short primaryVlanId, String vm_name,
-            UUID project_uuid) {
-        return true;
-    }
-
     public boolean addPort(String vif_uuid, String vm_uuid, String interface_name,
             String interface_ip, String mac_address, String network_uuid, short vlanId,
             short primaryVlanId, String vm_name) {
@@ -264,11 +256,6 @@ public class ContrailVRouterApi {
                 return false;
             }
         }
-        return true;
-    }
-
-    @Deprecated
-    public boolean DeletePort(UUID vif_uuid) {
         return true;
     }
 
