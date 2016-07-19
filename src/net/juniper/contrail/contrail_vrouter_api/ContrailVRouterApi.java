@@ -1,289 +1,285 @@
 /**
  * Copyright (c) 2014 Juniper Networks, Inc. All rights reserved.
  */
-
 package net.juniper.contrail.contrail_vrouter_api;
 
-import java.util.Arrays;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.nio.ByteBuffer;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentMap;
+import java.io.IOException;
 import org.apache.log4j.Logger;
-import org.apache.thrift.TException;
-import org.apache.thrift.protocol.TProtocol;
-import org.apache.thrift.protocol.TBinaryProtocol;
-import org.apache.thrift.transport.TTransport;
-import org.apache.thrift.transport.TSocket;
-import org.apache.thrift.transport.TFramedTransport;
-import org.apache.thrift.transport.TTransportException;
-import net.juniper.contrail.contrail_vrouter_api.InstanceService;
-import net.juniper.contrail.contrail_vrouter_api.Port;
+import net.juniper.contrail.api.ApiConnector;
+import net.juniper.contrail.api.ApiConnectorFactory;
+import net.juniper.contrail.api.Port;
 
 public class ContrailVRouterApi {
     private static final Logger s_logger =
             Logger.getLogger(ContrailVRouterApi.class);
 
-    private final InetAddress rpc_address;
-    private final int rpc_port;
-    private Map<UUID, Port> ports;
-    private InstanceService.Iface client;
-    private boolean oneShot;
-    private int timeout=0; // socket timeout in milliseconds
+    private final String serverAddress;
+    private final int serverPort;
+    private final String username;
+    private final String password;
+    private final String tenant;
+    private final String authtype;
+    private final String authurl;
 
-    public ContrailVRouterApi(InetAddress ip, int port) {
-        this(ip, port, false, 1000);
+    protected ApiConnector apiConnector;
+    private ConcurrentMap<String, Port> ports2Add;
+    private Queue<String> ports2Delete;
+    private boolean alive;
+    private boolean syncFailed;
+
+    public ContrailVRouterApi(String serverAddress, int serverPort) {
+        this.serverAddress = serverAddress;
+        this.serverPort = serverPort;
+        this.username = null;
+        this.password = null;
+        this.tenant = null;
+        this.authtype = null;
+        this.authurl = null;
+        this.ports2Add = new ConcurrentHashMap<String, Port>();
+        this.ports2Delete = new ConcurrentLinkedQueue<String>();
     }
 
-    public ContrailVRouterApi(InetAddress ip, int port, boolean oneShot, int timeout) {
-        this.rpc_address = ip;
-        this.rpc_port = port;
-        this.ports = new HashMap<UUID, Port>();
-        this.client = null;
-        this.oneShot = oneShot;
-        this.timeout = timeout;
+    public ContrailVRouterApi(String serverAddress, int serverPort,
+            String username, String password, String tenant,
+            String authtype, String authurl) {
+        this.serverAddress = serverAddress;
+        this.serverPort = serverPort;
+        this.username = username;
+        this.password = password;
+        this.tenant   = tenant;
+        this.authtype = authtype;
+        this.authurl  = authurl;
+        this.ports2Add = new ConcurrentHashMap<String, Port>();
+        this.ports2Delete = new ConcurrentLinkedQueue<String>();
     }
 
-    private static List<Short> UUIDToArray(UUID uuid) {
-        if (uuid == null) {
-            throw new IllegalArgumentException();
+    public boolean isServerAlive() {
+        if (apiConnector == null) {
+            apiConnector = ApiConnectorFactory.build(serverAddress,
+                                                     serverPort);
+            if (authurl != null || username != null) {
+                apiConnector.credentials(username, password)
+                            .tenantName(tenant)
+                            .authServer(authtype, authurl);
+            }
+            if (apiConnector == null) {
+                s_logger.warn(this + " failed to create ApiConnector.. retry later");
+                alive = false;
+                return false;
+            }
+            s_logger.info(this + " is alive. Got the pulse..");
         }
 
-        ByteBuffer bb = ByteBuffer.wrap(new byte[16]);
-        bb.putLong(uuid.getMostSignificantBits());
-        bb.putLong(uuid.getLeastSignificantBits());
-        byte[] buuid = bb.array();
-        Short[] suuid = new Short[16];
-        for (int i  = 0; i < buuid.length; i++) {
-            suuid[i] = (short) buuid[i];
-        }
-        return Arrays.asList(suuid);
+        alive = true;
+        return true;
     }
 
-    private static String MacAddressToString(byte[] mac) {
-        StringBuilder sb = new StringBuilder(18);
-        for (byte b : mac) {
-            if (sb.length() > 0)
-                sb.append(':');
-            sb.append(String.format("%02x", b));
-        }
-        return sb.toString();
+    public boolean getAlive() {
+        return alive;
     }
 
-    InstanceService.Iface CreateRpcClient() {
-        TSocket socket = new TSocket(rpc_address.getHostAddress(), rpc_port);
-        if (timeout != 0)
-            socket.setTimeout(timeout);
-        TTransport transport = new TFramedTransport(socket);
-        try {
-            transport.open();
-        } catch (TTransportException tte) {
-            s_logger.error(rpc_address + ":" + rpc_port +
-                    " Create TTransportException: " + tte.getMessage());
-            return null;
-        }
-        TProtocol protocol = new TBinaryProtocol(transport);
-        InstanceService.Iface iface = (InstanceService.Iface)
-                                       new InstanceService.Client(protocol);
-        return iface;
+    protected void setApiConnector(ApiConnector apiConnector) {
+        this.apiConnector = apiConnector;
     }
 
-    private boolean CreateAndResynchronizeRpcClient() {
-        client = CreateRpcClient();
-        if (client == null) {
-            return false;
-        }
-        if (oneShot) {
-            return true;
-        }
-        try {
-            client.Connect();
-        } catch (TException te) {
-            s_logger.error(rpc_address + ":" + rpc_port +
-                    " Connect TException: " + te.getMessage());
-            client = null;
-            return false;
-        }
-
-        s_logger.info("Connected to " + rpc_address + ":" + rpc_port);
-        return Resynchronize();
+    @Override
+    public String toString() {
+        return "Vrouter" + serverAddress + ":" + serverPort;
     }
 
     /**
-     * Add all the active ports to the agent
-     * @return true on success, false otherwise
-     */
-    private boolean Resynchronize() {
-        List<Port> lports = new ArrayList<Port>(ports.values());
-        try {
-            client.AddPort(lports);
-            return true;
-        } catch (TException te) {
-            s_logger.error(rpc_address + ":" + rpc_port +
-                    " Resynchronize TException: " + te.getMessage());
-            client = null;
-            return false;
-        }
-    }
-
-    /**
-     * Get current list of ports
+     * Get outstanding list of ports to be added
      * @return Port Map
      */
-    public Map<UUID, Port> getPorts() {
-        return ports;
+    public ConcurrentMap<String, Port> getPorts2Add() {
+        return ports2Add;
     }
 
     /**
-     * Add a port to the agent. The information is stored in the ports
-     * map since the vrouter agent may not be running at the
-     * moment or the RPC may fail.
-     *
-     * @param vif_uuid         UUID of the VIF/Port
-     * @param vm_uuid          UUID of the instance
-     * @param interface_name   Name of the VIF/Port
-     * @param interface_ip     IP address associated with the VIF
-     * @param mac_address      MAC address of the VIF
-     * @param network_uuid     UUID of the associated virtual network
+     * Get outstanding list of ports to be deleted
      */
-    public boolean addPort(UUID vif_uuid, UUID vm_uuid, String interface_name,
-            InetAddress interface_ip, byte[] mac_address, UUID network_uuid, short vlanId,
-            short primaryVlanId, String vm_name) {
-        addPort(vif_uuid, vm_uuid, interface_name, interface_ip,
-                mac_address, network_uuid, vlanId, primaryVlanId, vm_name, null);
-        return true;
+    public Queue<String> getPorts2Delete() {
+        return ports2Delete;
     }
 
     /**
-     * Add a port to the agent. The information is stored in the ports
-     * map since the vrouter agent may not be running at the
-     * moment or the RPC may fail.
+     * Add a port to the vrouter agent.
      *
-     * @param vif_uuid         UUID of the VIF/Port
-     * @param vm_uuid          UUID of the instance
+     * @param vif_uuid         String of the VIF/Port
+     * @param vm_uuid          String of the instance
      * @param interface_name   Name of the VIF/Port
      * @param interface_ip     IP address associated with the VIF
      * @param mac_address      MAC address of the VIF
-     * @param network_uuid     UUID of the associated virtual network
-     * @param project_uuid     UUID of the associated project
+     * @param network_uuid     String of the associated virtual network
+     * @param project_uuid     String of the associated project
      */
-    public boolean addPort(UUID vif_uuid, UUID vm_uuid, String interface_name,
-            InetAddress interface_ip, byte[] mac_address, UUID network_uuid, short vlanId,
-            short primaryVlanId, String vm_name,
-            UUID project_uuid) {
-        Port aport = new Port(UUIDToArray(vif_uuid), UUIDToArray(vm_uuid),
-                interface_name, interface_ip.getHostAddress(),
-                UUIDToArray(network_uuid), MacAddressToString(mac_address));
-        aport.setVlan_id(primaryVlanId);
-        aport.setIsolated_vlan_id(vlanId);
+    public boolean addPort(String vif_uuid, String vm_uuid, String interface_name,
+            String interface_ip, String mac_address, String network_uuid, short primaryVlanId,
+            short isolatedVlanId, String vm_name,
+            String project_uuid) {
+        Port aport = new Port();
+        aport.setUuid(vif_uuid);
+        aport.setName(vif_uuid);
+        aport.setId(vif_uuid);
+        aport.setInstance_id(vm_uuid);
+        aport.setSystem_name(interface_name);
+        aport.setIp_address(interface_ip);
+        aport.setMac_address(mac_address);
+        aport.setVn_id(network_uuid);
+        aport.setTx_vlan_id(primaryVlanId);
+        aport.setRx_vlan_id(isolatedVlanId);
         aport.setDisplay_name(vm_name);
-        aport.setVm_project_id(UUIDToArray(project_uuid));
-        ports.put(vif_uuid, aport);
-        if (client == null) {
-            if (!CreateAndResynchronizeRpcClient()) {
-                s_logger.error(rpc_address + ":" + rpc_port +
-                        " AddPort: " + vif_uuid + "(" + interface_name +
-                        ") FAILED");
-                return false;
-            }
-        } else {
-            List<Port> aports = new ArrayList<Port>();
-            aports.add(aport);
-            try {
-                client.AddPort(aports);
-            } catch (TException te) {
-                s_logger.error(rpc_address + ":" + rpc_port +
-                        " AddPort: " + vif_uuid + "(" +
-                        interface_name + ") TException: " + te.getMessage());
-                client = null;
-                return false;
-            }
-        }
-        return true;
-    }
+        aport.setVm_project_id(project_uuid);
 
-    public boolean addPort(String vif_uuid, String vm_uuid, String interface_name,
-            String interface_ip, String mac_address, String network_uuid, short vlanId,
-            short primaryVlanId, String vm_name) {
-        return addPort(vif_uuid, vm_uuid, interface_name, interface_ip,
-                mac_address, network_uuid, vlanId, primaryVlanId, vm_name, null);
-    }
+        if (!isServerAlive()) {
+            ports2Add.put(vif_uuid, aport);
 
-    public boolean addPort(String vif_uuid, String vm_uuid, String interface_name,
-            String interface_ip, String mac_address, String network_uuid, short vlanId,
-            short primaryVlanId, String vm_name, String project_uuid) {
-
-        try {
-            return addPort(UUID.fromString(vif_uuid),
-                        UUID.fromString(vm_uuid), interface_name,
-                        InetAddress.getByName(interface_ip),
-                        Utils.parseMacAddress(mac_address),
-                        UUID.fromString(network_uuid),
-                        vlanId, primaryVlanId, vm_name,
-                        UUID.fromString(project_uuid));
-        } catch (UnknownHostException e) {
-            s_logger.error("addPort failed due to unknown IP " + interface_ip);
+            s_logger.warn(this +
+                    " addPort: " + aport.getUuid() + "(" + aport.getSystem_name() + ") "
+                    + "failed, will retry later");
             return false;
         }
+        if (syncFailed) {
+            if (!sync()) {
+                ports2Add.put(vif_uuid, aport);
+
+                s_logger.warn(this +
+                        " addPort: " + aport.getUuid() + "(" + aport.getSystem_name() + ") "
+                        + "failed, will retry later");
+                return false;
+            }
+            retryFailedPorts();
+        }
+        if (!addPortInternal(aport)) {
+            ports2Add.put(vif_uuid, aport);
+            return false;
+        }
+        return true;
+    }
+
+    private boolean addPortInternal(Port aport) {
+        try {
+            apiConnector.create(aport);
+        } catch (IOException e) {
+               s_logger.warn(this +
+                    " addPort: " + aport.getUuid()  + "(" +
+                    aport.getSystem_name()  + ") Exception: " + e.getMessage());
+            return false;
+        }
+
+        return true;
     }
 
     /**
-     * Delete a port from the agent. The port is first removed from the
-     * internal ports map
+     * Delete a port from the agent.
      *
-     * @param vif_uuid  UUID of the VIF/Port
+     * @param uuid  String of the VIF/Port
      */
-    public boolean deletePort(UUID vif_uuid) {
-        ports.remove(vif_uuid);
-        if (client == null) {
-            if (!CreateAndResynchronizeRpcClient()) {
-                s_logger.error(rpc_address + ":" + rpc_port +
-                        " DeletePort: " + vif_uuid + " FAILED");
+    public boolean deletePort(String uuid) {
+         if (ports2Add.containsKey(uuid)) {
+             ports2Add.remove(uuid);
+         }
+         if (!isServerAlive()) {
+             ports2Delete.add(uuid);
+
+             s_logger.warn(this +
+                     " deletePort: " + uuid + " failed, will retry later");
+             return false;
+        }
+        if (syncFailed) {
+             if (!sync()) {
+                 ports2Delete.add(uuid);
+                 s_logger.warn(this +
+                          " deletePort: " + uuid
+                          + "failed, will retry later");
+                  return false;
+              }
+             retryFailedPorts();
+        }
+        if (!deletePortInternal(uuid)) {
+            ports2Delete.add(uuid);
+            return false;
+        }
+
+        return true;
+    }
+
+    private boolean deletePortInternal(String uuid) {
+        try {
+            apiConnector.delete(Port.class, uuid.toString());
+        } catch (IOException e) {
+
+            s_logger.warn(this +
+                    " deletePort: " + uuid +
+                    " Exception: " + e.getMessage());
+            return false;
+        }
+
+        return true;
+    }
+
+    public boolean sync() {
+
+        if (!isServerAlive()) {
+            s_logger.warn(this +
+                    " sync failed, vrouter is not alive");
+            syncFailed = true;
+            return false;
+        }
+        try {
+            boolean res = apiConnector.sync("/syncports");
+
+            if (!res) {
+                s_logger.warn(this + " sync request FAILED");
+                syncFailed = true;
                 return false;
             }
-        } else {
-            try {
-                client.DeletePort(UUIDToArray(vif_uuid));
-            } catch (TException te) {
-                s_logger.error(rpc_address + ":" + rpc_port +
-                        " AddPort: " + vif_uuid +
-                        " TException: " + te.getMessage());
-                client = null;
-                return false;
+        } catch (IOException e) {
+            s_logger.warn(this +
+                    " sync failed, exception: " + e.getMessage());
+            syncFailed = true;
+            return false;
+        }
+        syncFailed = false;
+
+        return true;
+    }
+
+    private boolean retryFailedPorts() {
+        for (String uuid: ports2Delete) {
+            if (deletePortInternal(uuid)) {
+                ports2Delete.remove(uuid);
+            }
+        }
+
+        for (Map.Entry<String, Port> entry: ports2Add.entrySet()) {
+            if (addPortInternal(entry.getValue())) {
+                ports2Add.remove(entry.getKey());
             }
         }
         return true;
     }
 
-    public boolean deletePort(String vif_uuid) {
-        return deletePort(UUID.fromString(vif_uuid));
-    }
-
-    /**
-     * Periodically check if the connection to the agent is valid.
-     * It is the API client's responsibility to periodically invoke this
-     * method
-     */
-    public void PeriodicConnectionCheck() {
-        if (client == null) {
-            if (!CreateAndResynchronizeRpcClient()) {
-                s_logger.error(rpc_address + ":" + rpc_port +
-                        " PeriodicConnectionCheck: FAILED");
-                return;
+    public boolean periodicCheck() {
+        if (!isServerAlive()) {
+            s_logger.warn(this + " not reachable");
+            return false;
+        }
+        if (syncFailed) {
+            if (!sync()) {
+                s_logger.warn(this + " is alive, but sync request fails");
+                return false;
             }
         }
-        try {
-            client.KeepAliveCheck();
-        } catch (TException te) {
-            s_logger.error(rpc_address + ":" + rpc_port +
-                    " KeepAliveCheck: TException: " +
-                    te.getMessage());
-            client = null;
+
+        if (!retryFailedPorts()) {
+            s_logger.warn(this + ": provisioning of one or more ports failed");
         }
+        return true;
     }
 }
-
