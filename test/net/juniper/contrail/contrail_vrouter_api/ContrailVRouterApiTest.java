@@ -1,97 +1,65 @@
-/**
- * Copyright (c) 2014 Juniper Networks, Inc
- */
-
 package net.juniper.contrail.contrail_vrouter_api;
 
-import java.util.UUID;
-import java.net.InetAddress;
-
-import org.apache.log4j.Logger;
-
-import static org.junit.Assert.*;
-
-import org.junit.Before;
-import org.junit.After;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-
-import static org.mockito.Mockito.*;
-import org.mockito.runners.MockitoJUnitRunner;
-import org.mockito.MockitoAnnotations;
+import java.io.IOException;
 import net.juniper.contrail.contrail_vrouter_api.ContrailVRouterApi;
-import net.juniper.contrail.contrail_vrouter_api.InstanceService;
-import net.juniper.contrail.contrail_vrouter_api.Port;
+import junit.framework.TestCase;
+import org.junit.Test;
+import org.apache.log4j.Logger;
+import org.junit.Before;
+import net.juniper.contrail.api.ApiConnector;
+import net.juniper.contrail.api.ApiConnectorMock;
+import net.juniper.contrail.api.ApiSerializer;
+import net.juniper.contrail.api.types.Project;
 
-@RunWith(MockitoJUnitRunner.class)
-public class ContrailVRouterApiTest {
-    @MockitoAnnotations.Mock
-    private InstanceService.Iface mockClient;
-    private ContrailVRouterApi apiTest;
+//@RunWith(MockitoJUnitRunner.class)
+//@RunWith(JUnit4.class)
+//@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class ContrailVRouterApiTest extends TestCase {
+//public class ContrailVRouterApiTest  {
+
+    private ContrailVRouterApi vrouterApi;
+    private ApiConnector api;
+
     private static final Logger s_logger =
-        Logger.getLogger(ContrailVRouterApiTest.class);
+            Logger.getLogger(ContrailVRouterApiTest.class);
 
     @Before
-    public void setUp() throws Exception {
-        s_logger.debug("Setting up ContrailVRouterApiTest");
-        int port = -1;
-        apiTest = spy(new ContrailVRouterApi(InetAddress.getLocalHost(),
-            port, false, 0));
-        doReturn(mockClient).when(apiTest).CreateRpcClient();
-    }
+    public void globalSetUp() throws IOException {
 
-    @After
-    public void tearDown() throws Exception {
-        s_logger.debug("Tearing down ContrailVRouterApiTest");
-    }
+        vrouterApi = new ContrailVRouterApi(null, 0);
 
-    @Test
-    public void TestAddPort() throws Exception {
-        // Resynchronize
-        UUID vif_uuid = UUID.randomUUID();
-        UUID instance_uuid = UUID.randomUUID();
-        UUID network_uuid = UUID.randomUUID();
-        UUID project_uuid = UUID.randomUUID();
-        byte[] mac = new byte[] { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 };
-        InetAddress ip = InetAddress.getLocalHost();
-        assertTrue(apiTest.addPort(vif_uuid, instance_uuid, "tapX",
-                        ip, mac, network_uuid, (short)1, (short)1000, "TestVM", project_uuid));
-        verify(mockClient).Connect();
-        verify(mockClient).AddPort(anyListOf(Port.class));
-        assertTrue(apiTest.getPorts().containsKey(vif_uuid));
-        // Add
-        UUID vif_uuid1 = UUID.randomUUID();
-        assertTrue(apiTest.addPort(vif_uuid1, instance_uuid, "tapX",
-                        ip, mac, network_uuid, (short)1, (short)1000, "TestVM", project_uuid));
-        verify(mockClient, times(2)).AddPort(anyListOf(Port.class));
-        assertTrue(apiTest.getPorts().containsKey(vif_uuid1));
+        api   = new ApiConnectorMock(null, 0);
+
+        vrouterApi.setApiConnector(api);
+
+     // Create default-domain,default-project
+        Project vProject = new Project();
+        vProject.setName("default-project");
+        try {
+            if (!api.create(vProject)) {
+                s_logger.error("Unable to create project: " + vProject.getName());
+                fail("default-project creation failed");
+                return;
+            }
+        } catch (IOException e) {
+            s_logger.error("Exception : " + e);
+            e.printStackTrace();
+            fail("default-project creation failed");
+            return;
+        }
     }
 
     @Test
-    public void TestDeletePort() throws Exception {
-        // Resynchronize
-        UUID vif_uuid = UUID.randomUUID();
-        UUID instance_uuid = UUID.randomUUID();
-        UUID network_uuid = UUID.randomUUID();
-        UUID project_uuid = UUID.randomUUID();
-        byte[] mac = new byte[] { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 };
-        InetAddress ip = InetAddress.getLocalHost();
-        assertTrue(apiTest.addPort(vif_uuid, instance_uuid, "tapX",
-                        ip, mac, network_uuid, (short)1, (short)1000, "TestVM", project_uuid));
-        verify(mockClient).Connect();
-        verify(mockClient).AddPort(anyListOf(Port.class));
-        assertTrue(apiTest.getPorts().containsKey(vif_uuid));
-        // Delete
-        assertTrue(apiTest.deletePort(vif_uuid));
-        verify(mockClient).DeletePort(anyListOf(Short.class));
-        assertFalse(apiTest.getPorts().containsKey(vif_uuid));
-    }
+    public void testAddDeletePort() {
+        vrouterApi = new ContrailVRouterApi(null, 0);
 
-    @Test
-    public void TestPeriodicConnectionCheck() throws Exception {
-        // Resynchronize and periodic check
-        apiTest.PeriodicConnectionCheck();
-        verify(mockClient).Connect();
-        verify(mockClient).KeepAliveCheck();
+        api   = new ApiConnectorMock(null, 0);
+
+        vrouterApi.setApiConnector(api);
+
+        vrouterApi.addPort("VIF_UUID", "VM_UUID", "INTF_NAME", "INTF_IP", "MAC_ADDRESS",
+                "NW_UUID", (short)1000, (short)1001, "VM-NAME", "PROJ_UUID");
+
+        vrouterApi.deletePort("VIF_UUID");
     }
 }
