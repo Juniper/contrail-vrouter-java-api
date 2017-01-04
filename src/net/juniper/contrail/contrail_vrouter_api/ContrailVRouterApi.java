@@ -30,6 +30,7 @@ public class ContrailVRouterApi {
     private ConcurrentMap<String, Port> ports2Add;
     private Queue<String> ports2Delete;
     private boolean alive;
+    private boolean active = true;
     private boolean syncFailed;
 
     public ContrailVRouterApi(String serverAddress, int serverPort) {
@@ -81,6 +82,14 @@ public class ContrailVRouterApi {
 
     public boolean getAlive() {
         return alive;
+    }
+
+    public boolean getActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
     }
 
     protected void setApiConnector(ApiConnector apiConnector) {
@@ -136,11 +145,20 @@ public class ContrailVRouterApi {
         aport.setDisplay_name(vm_name);
         aport.setVm_project_id(project_uuid);
 
+        if (!active) {
+            ports2Add.put(vif_uuid, aport);
+
+            s_logger.warn(this +
+                    " is not active, addPort: " + aport.getUuid() + "(" + aport.getSystem_name() + ") "
+                    + "failed, will retry later");
+            return false;
+        }
+
         if (!isServerAlive()) {
             ports2Add.put(vif_uuid, aport);
 
             s_logger.warn(this +
-                    " addPort: " + aport.getUuid() + "(" + aport.getSystem_name() + ") "
+                    " is not alive, addPort: " + aport.getUuid() + "(" + aport.getSystem_name() + ") "
                     + "failed, will retry later");
             return false;
         }
@@ -184,11 +202,20 @@ public class ContrailVRouterApi {
          if (ports2Add.containsKey(uuid)) {
              ports2Add.remove(uuid);
          }
+
+         if (!active) {
+             ports2Delete.add(uuid);
+
+             s_logger.warn(this +
+                     " is not active, deletePort: " + uuid + " failed, will retry later");
+             return false;
+         }
+
          if (!isServerAlive()) {
              ports2Delete.add(uuid);
 
              s_logger.warn(this +
-                     " deletePort: " + uuid + " failed, will retry later");
+                     " is not alive, deletePort: " + uuid + " failed, will retry later");
              return false;
         }
         if (syncFailed) {
