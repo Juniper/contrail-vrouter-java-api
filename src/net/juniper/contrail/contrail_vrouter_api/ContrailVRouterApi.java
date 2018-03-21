@@ -259,7 +259,7 @@ public class ContrailVRouterApi {
             return false;
         }
         try {
-            boolean res = apiConnector.sync("/syncports");
+            boolean res = apiConnector.sync("/syncports").isSuccess();
 
             if (!res) {
                 s_logger.warn(this + " sync request FAILED");

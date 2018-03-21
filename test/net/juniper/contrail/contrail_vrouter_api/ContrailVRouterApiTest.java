@@ -36,7 +36,7 @@ public class ContrailVRouterApiTest extends TestCase {
         Project vProject = new Project();
         vProject.setName("default-project");
         try {
-            if (!api.create(vProject)) {
+            if (!api.create(vProject).isSuccess()) {
                 s_logger.error("Unable to create project: " + vProject.getName());
                 fail("default-project creation failed");
                 return;
