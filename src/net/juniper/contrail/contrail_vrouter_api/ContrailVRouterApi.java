@@ -13,6 +13,8 @@ import org.apache.log4j.Logger;
 import net.juniper.contrail.api.ApiConnector;
 import net.juniper.contrail.api.ApiConnectorFactory;
 import net.juniper.contrail.api.Port;
+import net.juniper.contrail.api.EnablePort;
+import net.juniper.contrail.api.DisablePort;
 
 public class ContrailVRouterApi {
     private static final Logger s_logger =
@@ -187,6 +189,71 @@ public class ContrailVRouterApi {
                s_logger.warn(this +
                     " addPort: " + aport.getUuid()  + "(" +
                     aport.getSystem_name()  + ") Exception: " + e.getMessage());
+            return false;
+        }
+
+        return true;
+    }
+
+
+    private boolean enablePortInternal(EnablePort enable_port) {
+        try {
+            apiConnector.update(enable_port);
+
+        } catch (IOException e) {
+               s_logger.warn(this +
+                    " enablePort: " + enable_port.getUuid()  + "(" +
+                    enable_port.getSystem_name()  + ") Exception: " + e.getMessage());
+            return false;
+        }
+
+        return true;
+    }
+
+    public boolean enablePort(String vif_uuid, String interface_name) {
+        EnablePort enable_port = new EnablePort();
+        enable_port.setUuid(vif_uuid);
+        enable_port.setName(vif_uuid);
+        enable_port.setId(vif_uuid);
+        enable_port.setSystem_name(interface_name);
+
+        s_logger.info(this + "enablePort call in ContrailVRouterApi");
+
+        if (!enablePortInternal(enable_port)) {
+            s_logger.info(this + " enablePort: " + enable_port.getUuid() + "(" +
+                    enable_port.getSystem_name() + ")" + "failed");
+            return false;
+        }
+
+        return true;
+    }
+
+    private boolean disablePortInternal(DisablePort disable_port) {
+        try {
+            apiConnector.update(disable_port);
+
+        } catch (IOException e) {
+               s_logger.warn(this +
+                    " disablePort: " + disable_port.getUuid()  + "(" +
+                    disable_port.getSystem_name()  + ") Exception: " + e.getMessage());
+            return false;
+        }
+
+        return true;
+    }
+
+    public boolean disablePort(String vif_uuid, String interface_name) {
+        DisablePort disable_port = new DisablePort();
+        disable_port.setUuid(vif_uuid);
+        disable_port.setName(vif_uuid);
+        disable_port.setId(vif_uuid);
+        disable_port.setSystem_name(interface_name);
+
+        s_logger.info(this + "disablePort call in ContrailVRouterApi");
+
+        if (!disablePortInternal(disable_port)) {
+            s_logger.info(this + " disablePort: " + disable_port.getUuid() + "(" +
+                    disable_port.getSystem_name() + ")" + "failed");
             return false;
         }
 
