@@ -1,5 +1,5 @@
 [gerrit]
 host=review.opencontrail.org
 port=29418
-project=Juniper/contrail-vrouter-java-api.git
-defaultbranch=master
+project=Juniper/contrail-vrouter-java-api
+defaultbranch=dgautam-test2
